@@ -507,39 +507,28 @@ elif page == "Carbon Calculator":
 
     # ── BASELINE CASE ─────────────────────────────────────────────
         if all_zero:
-            prediction = BASELINE_CO2_PER_DAY
-            used_model = False
+            prediction            = BASELINE_CO2_PER_DAY
+            energy_co2_display    = 0.0
+            transport_co2_display = 0.0
+            plastic_co2_display   = 0.0
+            used_model    = False
             used_fallback = False
             used_baseline = True
 
         else:
             used_baseline = False
 
-        # ── ML PREDICTION WITH CALIBRATION ───────────────────────
-        # Hardcoded pipeline: scale -> IoT model -> calibrate
-        # No pkl files required — values baked directly into code
-            try:
-                prediction = predict_co2(energy_usage_kwh_day, transportation_distance, plastic_usage)
-                used_model = True
-                used_fallback = False
-            except Exception:
-                prediction = energy_co2 + transportation_co2 + plastic_co2
-                used_model = False
-                used_fallback = True
-
-    # ── SAVE STATE ────────────────────────────────────────────────
-        # ── PROPORTIONAL SPLIT ────────────────────────────────
-        # Split the ML prediction proportionally across the 3 factors
-        # so breakdown cards always sum to the prediction exactly
-        _weight_sum = energy_co2 + transportation_co2 + plastic_co2
-        if _weight_sum > 0 and not all_zero:
-            energy_co2_display    = (energy_co2 / _weight_sum) * prediction
-            transport_co2_display = (transportation_co2 / _weight_sum) * prediction
-            plastic_co2_display   = (plastic_co2 / _weight_sum) * prediction
-        else:
+        # ── PREDICTION & BREAKDOWN ───────────────────────────────
+        # Prediction = direct sum of the three emission factor values
+        # Breakdown cards use the same raw values so they always match
             energy_co2_display    = energy_co2
             transport_co2_display = transportation_co2
             plastic_co2_display   = plastic_co2
+            prediction  = max(BASELINE_CO2_PER_DAY, energy_co2_display + transport_co2_display + plastic_co2_display)
+            used_model    = True
+            used_fallback = False
+
+    # ── SAVE STATE ────────────────────────────────────────────────
 
         st.session_state.update(dict(
             has_predicted=True,
