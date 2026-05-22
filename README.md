@@ -1,5 +1,17 @@
 # Eco-Predict — Cambodia Personal Carbon Emission Tracker
 
+**Mini Project | Team Work**
+
+| | Member |
+|---|---|
+| 1 | TAN Vouchleang |
+| 2 | SOUN Chey Nutt |
+| 3 | SEK Bonditkolyaney |
+| 4 | THOL Thida |
+| 5 | VEI Saata |
+
+---
+
 A Streamlit web application that predicts daily personal carbon emissions based on electricity usage, transportation, and plastic consumption. Built using a Multiple Linear Regression model trained on IoT sensor data and validated against primary survey data collected from Cambodian respondents.
 
 ---
@@ -9,7 +21,7 @@ A Streamlit web application that predicts daily personal carbon emissions based 
 | File | Description |
 |---|---|
 | `app.py` | Main Streamlit application |
-| `carbon_predictor_model.pkl` | IoT-trained linear regression model |
+| `carbon_predictor_model.pkl` | IoT trained linear regression model |
 | `carbon_scaler.pkl` | StandardScaler fitted on IoT training data |
 | `carbon_calibrator.pkl` | Calibration layer fitted on primary survey data |
 | `primary_data_CO2.csv` | Primary survey data (used for comparison chart) |
@@ -40,17 +52,17 @@ The prediction uses a three-step pipeline that mirrors the Local Validation note
 User inputs → IoT Scaler → IoT Model → Calibrator → Prediction
 ```
 
-**Step 1 — IoT Scaler** (`carbon_scaler.pkl`)
+**Step 1: IoT Scaler** (`carbon_scaler.pkl`)
 Normalizes the three raw input features (kWh, km, kg) using StandardScaler fitted on the IoT training dataset. This ensures inputs are in the same range the model was trained on.
 
-**Step 2 — IoT Model** (`carbon_predictor_model.pkl`)
+**Step 2: IoT Model** (`carbon_predictor_model.pkl`)
 A Multiple Linear Regression model trained on 10,000 IoT sensor records. Learned emission factors (unscaled):
 - Energy: **0.4969 kgCO₂/kWh**
 - Transport: **0.1997 kgCO₂/km**
 - Plastic: **3.5413 kgCO₂/kg**
 - Intercept: **0.3160 kgCO₂**
 
-**Step 3 — Calibrator** (`carbon_calibrator.pkl`)
+**Step 3: Calibrator** (`carbon_calibrator.pkl`)
 A secondary linear correction that aligns IoT model outputs with primary survey data:
 - Scale factor: **0.3995**
 - Intercept: **-0.0584**
@@ -96,7 +108,7 @@ These constants are used only for the breakdown cards in the app. The final pred
 
 ## Zero-Input Behaviour
 
-If all inputs are zero, the app returns **0.50 kg CO₂/day** as a human metabolic baseline. This is not from the model — it represents the minimum unavoidable daily footprint from metabolism and indirect consumption. Human breathing CO₂ is carbon-neutral (part of the natural cycle) so this baseline does not represent harmful emissions.
+If all inputs are zero, the app returns **0.50 kg CO₂/day** as a human metabolic baseline. This is not from the model it represents the minimum unavoidable daily footprint from metabolism and indirect consumption. Human breathing CO₂ is carbon-neutral (part of the natural cycle) so this baseline does not represent harmful emissions.
 
 ---
 
@@ -116,4 +128,4 @@ This ensures the three cards always sum exactly to the prediction displayed at t
 
 ## Project Context
 
-Built in response to **SDG Goal 13.3** — to raise awareness of personal carbon emissions among Cambodian communities. The model bridges the gap between international IoT datasets and local Cambodian lifestyle data through a two-stage training and calibration approach.
+Built in response to **SDG Goal 13.3** to raise awareness of personal carbon emissions among Cambodian communities. The model bridges the gap between international IoT datasets and local Cambodian lifestyle data through a two-stage training and calibration approach.
