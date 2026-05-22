@@ -202,40 +202,33 @@ html, body, [class*="css"] {
 # File Paths
 # ─────────────────────────────────────────────────────────────────
 BASE_DIR           = Path(__file__).resolve().parent
-MODEL_PATH         = BASE_DIR / "carbon_predictor_model.pkl"
-SCALER_PATH        = BASE_DIR / "carbon_scaler.pkl"
-CALIBRATOR_PATH    = BASE_DIR / "carbon_calibrator.pkl"
 PRIMARY_DATA_PATH  = BASE_DIR / "primary_data_CO2.csv"
 
 # ─────────────────────────────────────────────────────────────────
-# Load Model & Scaler
+# Prediction Pipeline (hardcoded — no pkl files needed)
+# Values extracted from IoT-trained model + calibrator
 # ─────────────────────────────────────────────────────────────────
-@st.cache_resource
-def load_model():
-    if not MODEL_PATH.exists():
-        return None
-    return joblib.load(MODEL_PATH)
+import numpy as np
 
+# Scaler parameters (fitted on IoT training data)
+SCALER_MEAN  = np.array([25.66649398, 50.32546990,  0.08705183])
+SCALER_SCALE = np.array([13.81531346, 29.01240073,  0.02007625])
 
-@st.cache_resource
-def load_scaler():
-    # Load the scaler fitted on IoT data during training
-    if not SCALER_PATH.exists():
-        return None
-    return joblib.load(SCALER_PATH)
+# Model coefficients (IoT linear regression)
+MODEL_COEF      = np.array([6.86433035, 5.79254395, 0.07109611])
+MODEL_INTERCEPT = 23.424841093216827
 
+# Calibration layer (IoT -> primary survey alignment)
+CALIB_COEF      = 0.3995250462465559
+CALIB_INTERCEPT = -0.05837954093912057
 
-@st.cache_resource
-def load_calibrator():
-    # Load the calibration layer (scale: 0.3995, intercept: -0.0584)
-    if not CALIBRATOR_PATH.exists():
-        return None
-    return joblib.load(CALIBRATOR_PATH)
-
-
-model      = load_model()
-scaler     = load_scaler()
-calibrator = load_calibrator()
+def predict_co2(energy_kwh, transport_km, plastic_kg):
+    """Full pipeline: scale -> IoT model -> calibrate"""
+    x = np.array([energy_kwh, transport_km, plastic_kg])
+    x_scaled = (x - SCALER_MEAN) / SCALER_SCALE
+    raw_iot  = float(np.dot(x_scaled, MODEL_COEF)) + MODEL_INTERCEPT
+    result   = CALIB_COEF * raw_iot + CALIB_INTERCEPT
+    return max(0.0, float(result))
 
 # ─────────────────────────────────────────────────────────────────
 # Constants  (verified against training data)
@@ -254,7 +247,7 @@ PLASTIC_KG_PER_ITEM     = 0.141               # 0.141 kg per item
 MOTORCYCLE_PETROL_CO2   = 0.11367            # kg CO2/km  (from dataset header)
 EDC_RATE                = 610.0              # Riel / kWh  (EDC residential tier)
 GRID_EMISSION_FACTOR    = 0.18708            # kg CO2 / kWh
-PLASTIC_LIFECYCLE_CO2   = 6.0               # kg CO2 / kg plastic
+PLASTIC_LIFECYCLE_CO2   = 1.0               # kg CO2 / kg plastic (primary data factor)
 
 # ─────────────────────────────────────────────────────────────────
 # Baseline: human metabolic CO2 + minimal indirect emissions
@@ -382,7 +375,7 @@ elif page == "Carbon Calculator":
     )
 
     # ── FIX: Warn if the value looks like it was entered in kWh instead of Riel
-    if 0 < electricity_payment < 2000:
+    if 0 < electricity_payment < 1000:
         st.warning(
             f"⚠️ Your entered value ({electricity_payment:,.0f}) seems very low. "
             f"Please make sure your electricity bill is entered in **Riel (៛)**, not in kWh. "
@@ -493,13 +486,8 @@ elif page == "Carbon Calculator":
         "Transportation_Distance_km": [transportation_distance],
         "Plastic_Usage_kg":           [plastic_usage],
     })
-    if scaler is not None:
-        try:
-           input_data_scaled = scaler.transform(input_data)
-        except Exception:
-          input_data_scaled = input_data.values
-    else:
-        input_data_scaled = input_data.values
+    # Scaled values computed internally by predict_co2()
+    input_data_scaled = ((input_data.values - SCALER_MEAN) / SCALER_SCALE)
     scaled_input_df = pd.DataFrame(
         input_data_scaled,
         columns=["Energy_Usage_kWh", "Transportation_Distance_km", "Plastic_Usage_kg"],
@@ -528,32 +516,16 @@ elif page == "Carbon Calculator":
             used_baseline = False
 
         # ── ML PREDICTION WITH CALIBRATION ───────────────────────
-        # Reproduces Local Validation notebook pipeline exactly:
-        # Step 1: IoT scaler normalizes raw input features
-        # Step 2: IoT model predicts raw CO2
-        # Step 3: Calibrator corrects to primary survey data range
-            ml_prediction = None
-            if model is not None and calibrator is not None:
-                try:
-                    raw_iot = model.predict(input_data_scaled)
-                    ml_prediction = float(calibrator.predict(raw_iot.reshape(-1, 1))[0])
-                    ml_prediction = max(0.0, ml_prediction)
-                except Exception:
-                    ml_prediction = None
-
-        # ── FALLBACK: direct emission factor sum ──────────────────
-            direct_sum = energy_co2 + transportation_co2 + plastic_co2
-
-        # ── FINAL DECISION ────────────────────────────────────────
-            if ml_prediction is None:
-                prediction = direct_sum
-                used_model = False
-                used_fallback = True
-
-            else:
-                prediction = ml_prediction
+        # Hardcoded pipeline: scale -> IoT model -> calibrate
+        # No pkl files required — values baked directly into code
+            try:
+                prediction = predict_co2(energy_usage_kwh_day, transportation_distance, plastic_usage)
                 used_model = True
                 used_fallback = False
+            except Exception:
+                prediction = energy_co2 + transportation_co2 + plastic_co2
+                used_model = False
+                used_fallback = True
 
     # ── SAVE STATE ────────────────────────────────────────────────
         # ── PROPORTIONAL SPLIT ────────────────────────────────
